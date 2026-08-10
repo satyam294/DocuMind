@@ -3,5 +3,7 @@ langchain-community
 pypdf
 langchain-huggingface
 sentence-transformers
-chromadb
 langchain-chroma
+chromadb
+langchain-groq
+python-dotenv
