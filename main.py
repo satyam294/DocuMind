@@ -1,6 +1,7 @@
 import os
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
 
 def load_document(file_path):
     """
@@ -40,6 +41,14 @@ def chunk_text(documents):
     return chunks
 
 
+def get_embedding_model(): # NEW FUNCTION
+    """
+    Initializes and returns our embedding model.
+    """
+    print("Initializing embedding model...")
+    model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return model
+
 
 if __name__ == "__main__":
 
@@ -57,15 +66,19 @@ if __name__ == "__main__":
         print(docs[0].metadata)
 
         chunks = chunk_text(docs)
-
         print(f"Split into {len(chunks)} chunk(s).")
 
-        print("\n--- First Chunk ---")
-        print(chunks[0].page_content)
+        embedding_model = get_embedding_model()
+
+        first_chunk_text = chunks[0].page_content
+        print(f"\nOriginal Text: '{first_chunk_text[:50]}...'")
         
-        if len(chunks) > 1:
-            print("\n--- Second Chunk ---")
-            print(chunks[1].page_content)
+        # .embed_query() converts a single string of text into a vector
+        vector = embedding_model.embed_query(first_chunk_text)
         
+        print(f"\nSuccess! The text was converted into a list of {len(vector)} numbers.")
+        print("Here are the first 5 numbers of the vector:")
+        print(vector[:5])
+
     except Exception as e:
         print(f"An error occurred: {e}")
