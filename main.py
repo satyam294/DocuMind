@@ -1,7 +1,11 @@
 import os
+import shutil
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
+CHROMA_PATH = "./data/vectordb"
 
 def load_document(file_path):
     """
@@ -31,8 +35,8 @@ def chunk_text(documents):
     
     # Create text splitter
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=30,      
-        chunk_overlap=5,    
+        chunk_size=600,      
+        chunk_overlap=50,    
         separators=["\n\n", "\n", " ", ""] 
     )
     
@@ -50,35 +54,44 @@ def get_embedding_model(): # NEW FUNCTION
     return model
 
 
+def save_to_chroma(chunks, embedding_model): 
+    """
+    Takes the text chunks and the embedding model, converts the chunks to vectors,
+    and saves them, with original chunk in a local Chroma database.
+    """
+    # Clear out the old database folder if it exists
+    if os.path.exists(CHROMA_PATH):
+        shutil.rmtree(CHROMA_PATH)
+        
+    print(f"Saving {len(chunks)} chunks to ChromaDB...")
+    
+    # Create a new Chroma database from our documents
+    # LangChain implicitly runs the embedding model on the chunks
+    db = Chroma.from_documents(
+        chunks, 
+        embedding_model, 
+        persist_directory=CHROMA_PATH
+    )
+    
+    print(f"Successfully saved to {CHROMA_PATH} directory!")
+    return db
+
+
 if __name__ == "__main__":
 
-    file_to_load = "sample.txt"
+    file_to_load = "./data/raw/drylab.pdf"
     
     try:
         docs = load_document(file_to_load)
-        
         print(f"\nSuccess! Loaded {len(docs)} document(s).")
-
-        print("\n--- Page Content ---")
-        print(docs[0].page_content)
-        
-        print("\n--- Metadata ---")
-        print(docs[0].metadata)
 
         chunks = chunk_text(docs)
         print(f"Split into {len(chunks)} chunk(s).")
 
         embedding_model = get_embedding_model()
-
-        first_chunk_text = chunks[0].page_content
-        print(f"\nOriginal Text: '{first_chunk_text[:50]}...'")
         
-        # .embed_query() converts a single string of text into a vector
-        vector = embedding_model.embed_query(first_chunk_text)
-        
-        print(f"\nSuccess! The text was converted into a list of {len(vector)} numbers.")
-        print("Here are the first 5 numbers of the vector:")
-        print(vector[:5])
+        # Save them to the database -> lang_chroma runs the embedding model and stores vectors
+        db = save_to_chroma(chunks, embedding_model)
 
     except Exception as e:
         print(f"An error occurred: {e}")
