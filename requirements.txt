@@ -7,3 +7,4 @@ langchain-chroma
 chromadb
 langchain-groq
 python-dotenv
+streamlit

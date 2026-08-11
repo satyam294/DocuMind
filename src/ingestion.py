@@ -51,10 +51,6 @@ def ingest_document(file_path):
     docs = load_document(file_path)
     chunks = chunk_text(docs)
     embedding_model = get_embedding_model()
-    
-    # Clear existing DB if any, and store new chunks
-    if os.path.exists(CHROMA_PATH):
-        shutil.rmtree(CHROMA_PATH)
         
     print(f"Saving {len(chunks)} chunks to ChromaDB...")
     db = Chroma.from_documents(

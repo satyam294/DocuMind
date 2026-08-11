@@ -12,7 +12,7 @@ def get_embedding_model():
     return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
-def search_db(query, k=2):
+def search_db(query, k=3):
     embedding_model = get_embedding_model()
 
     db = Chroma(
