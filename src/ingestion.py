@@ -4,6 +4,7 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 
 CHROMA_PATH = "./data/vectordb"
 
@@ -48,8 +49,30 @@ def ingest_document(file_path):
     """
     print(f"\n--- Starting Data Ingestion Pipeline for: {file_path} ---")
     
-    docs = load_document(file_path)
-    chunks = chunk_text(docs)
+    doclist = load_document(file_path)
+    embed_and_save(doclist)
+    
+
+
+def ingest_raw_text(raw_text): 
+    """
+    Bypasses the file loader and ingests raw text directly.
+    """
+    print("\n--- Starting Data Ingestion Pipeline for raw text ---")
+    
+    doc = Document(
+        page_content=raw_text, 
+        metadata={"source": "pasted_text"}
+    )
+    embed_and_save([doc])
+    
+
+    
+def embed_and_save(doclist):
+    """
+    chunking, embedding and saving to ChromaDB
+    """
+    chunks = chunk_text(doclist)
     embedding_model = get_embedding_model()
         
     print(f"Saving {len(chunks)} chunks to ChromaDB...")
