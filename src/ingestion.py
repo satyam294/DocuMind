@@ -1,5 +1,5 @@
 import os
-import shutil
+import hashlib
 from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -7,6 +7,26 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 CHROMA_PATH = "./data/vectordb"
+
+def get_embedding_model():
+    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+
+def get_document_hash(documents):
+    full_text = "".join([doc.page_content for doc in documents])
+    return hashlib.sha256(full_text.encode('utf-8')).hexdigest()
+
+
+def is_duplicate(content_hash):
+    if not os.path.exists(CHROMA_PATH):
+        return False 
+        
+    db = Chroma(persist_directory=CHROMA_PATH, embedding_function=get_embedding_model())
+    
+    results = db.get(where={"file_hash": content_hash})
+    return len(results['ids']) > 0
+
+
 
 def load_document(file_path):
     print(f"Loading document: {file_path}")
@@ -37,21 +57,25 @@ def chunk_text(documents):
 
 
 
-def get_embedding_model():
-    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-
-
 def ingest_document(file_path):
     """
     Main function for Ingestion Pipeline:
-    Loads a file, chunks it, generates embeddings, and saves to ChromaDB.
+    Loads a file, checks for duplicacy, chunks it, generates embeddings, and saves to ChromaDB.
     """
     print(f"\n--- Starting Data Ingestion Pipeline for: {file_path} ---")
     
     doclist = load_document(file_path)
-    embed_and_save(doclist)
+
+    # Duplicacy Check
+    content_hash = get_document_hash(doclist)
+
+    if is_duplicate(content_hash):
+        print("Duplicate document found! Skipping ingestion.")
+        return False
     
+    embed_and_save(doclist, content_hash)
+    return True
+
 
 
 def ingest_raw_text(raw_text): 
@@ -64,15 +88,29 @@ def ingest_raw_text(raw_text):
         page_content=raw_text, 
         metadata={"source": "pasted_text"}
     )
-    embed_and_save([doc])
+
+    # Duplicacy Check
+    content_hash = get_document_hash([doc])
+
+    if is_duplicate(content_hash):
+        print("Duplicate text found! Skipping ingestion.")
+        return False
+    
+    embed_and_save([doc], content_hash)
+    return True
     
 
     
-def embed_and_save(doclist):
+def embed_and_save(doclist, content_hash):
     """
     chunking, embedding and saving to ChromaDB
     """
     chunks = chunk_text(doclist)
+
+    # add content_hash to the metadata
+    for chunk in chunks:
+        chunk.metadata["file_hash"] = content_hash
+
     embedding_model = get_embedding_model()
         
     print(f"Saving {len(chunks)} chunks to ChromaDB...")

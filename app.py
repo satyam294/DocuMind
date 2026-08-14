@@ -17,19 +17,22 @@ with st.sidebar:
         uploaded_file = st.file_uploader("Choose a .txt or .pdf file", type=["txt", "pdf"])
             
         if uploaded_file is not None:
-            # if new file
-            if uploaded_file.name != st.session_state.get("last_uploaded_file"):
-                # temporarily save the uploaded file to disk.
-                temp_file_path = f"./data/raw/temp_{uploaded_file.name}"
-                with open(temp_file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                    
-                with st.spinner("Processing and indexing document..."):
-                    ingest_document(temp_file_path)
+    
+            # temporarily save the uploaded file to disk.
+            temp_file_path = f"./data/raw/temp_{uploaded_file.name}"
+            with open(temp_file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
                 
-                os.remove(temp_file_path)
-                st.session_state.last_uploaded_file = uploaded_file.name
-                st.success("Document ingested successfully! Database updated.")
+            with st.spinner("Processing document..."):
+                is_new = ingest_document(temp_file_path)
+
+            if is_new:
+                st.success("Document ingested successfully!")
+            else:
+                st.error("Duplicate document. Skipped ingestion.")
+            
+            os.remove(temp_file_path)
+            
         
 
     # TAB 2: raw text pasting logic
@@ -48,18 +51,23 @@ with st.sidebar:
         if st.button("Ingest Text"):
             if pasted_text.strip():
                 with st.spinner("Processing pasted text..."):
-                    ingest_raw_text(pasted_text)
+                    is_new = ingest_raw_text(pasted_text)
 
-                st.session_state.clear_pasted_text = True
-                st.session_state.show_ingest_success = True
-                st.rerun()
+                if is_new:
+                    st.success("Text ingested successfully!")
+                    st.session_state.clear_pasted_text = True
+                    st.session_state.show_ingest_status = True
+                    st.rerun()
+                else:
+                    st.error("Duplicate document. Skipped ingestion.")
+
             else:
                 st.warning("Please paste some text first.")
 
-         # Show pending success message from the previous run, then clear it
-        if st.session_state.get("show_ingest_success", False):
+        # Show pending success message from the previous run, then clear it
+        if st.session_state.get("show_ingest_status", False):
             st.success("Text ingested successfully!")
-            st.session_state.show_ingest_success = False
+            st.session_state.show_ingest_status = False
   
     
 # --- MAIN AREA: Query Pipeline ---
