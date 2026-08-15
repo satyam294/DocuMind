@@ -1,7 +1,10 @@
 import streamlit as st
 import os
-from src.ingestion import ingest_document, ingest_raw_text
+from src.ingestion import ingest_document, ingest_raw_text, get_available_documents
 from src.query_engine import get_answer
+
+if "available_docs" not in st.session_state:
+    st.session_state.available_docs = get_available_documents()
 
 st.title("DocuMind - Query your Docs")
 
@@ -17,21 +20,25 @@ with st.sidebar:
         uploaded_file = st.file_uploader("Choose a .txt or .pdf file", type=["txt", "pdf"])
             
         if uploaded_file is not None:
-    
-            # temporarily save the uploaded file to disk.
-            temp_file_path = f"./data/raw/temp_{uploaded_file.name}"
-            with open(temp_file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-                
-            with st.spinner("Processing document..."):
-                is_new = ingest_document(temp_file_path)
 
-            if is_new:
-                st.success("Document ingested successfully!")
-            else:
-                st.error("Duplicate document. Skipped ingestion.")
-            
-            os.remove(temp_file_path)
+            if st.button("Ingest File"):
+    
+                # temporarily save the uploaded file to disk.
+                temp_file_path = f"./data/raw/temp_{uploaded_file.name}"
+                with open(temp_file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                    
+                with st.spinner("Processing document..."):
+                    is_new = ingest_document(temp_file_path, uploaded_file.name)
+
+                if is_new:
+                    st.success("Document ingested successfully!")
+                    st.session_state.available_docs = get_available_documents()
+                    st.rerun()
+                else:
+                    st.error("Duplicate document. Skipped ingestion.")
+                
+                os.remove(temp_file_path)
             
         
 
@@ -40,7 +47,10 @@ with st.sidebar:
         # Clear the text area before instantiation, if flagged
         if st.session_state.get("clear_pasted_text", False):
             st.session_state.pasted_text = ""
+            st.session_state.text_title = ""
             st.session_state.clear_pasted_text = False
+
+        text_title = st.text_input("Give this text a title:")
 
         pasted_text = st.text_area(
             "Paste your raw text here:",
@@ -49,20 +59,21 @@ with st.sidebar:
         )
 
         if st.button("Ingest Text"):
-            if pasted_text.strip():
+            if pasted_text.strip() and text_title.strip():
                 with st.spinner("Processing pasted text..."):
-                    is_new = ingest_raw_text(pasted_text)
+                    is_new = ingest_raw_text(pasted_text, text_title)
 
                 if is_new:
                     st.success("Text ingested successfully!")
                     st.session_state.clear_pasted_text = True
                     st.session_state.show_ingest_status = True
+                    st.session_state.available_docs = get_available_documents()
                     st.rerun()
                 else:
                     st.error("Duplicate document. Skipped ingestion.")
 
             else:
-                st.warning("Please paste some text first.")
+                st.warning("Please provide both a title and text.")
 
         # Show pending success message from the previous run, then clear it
         if st.session_state.get("show_ingest_status", False):
@@ -72,6 +83,13 @@ with st.sidebar:
     
 # --- MAIN AREA: Query Pipeline ---
 st.header("2. Ask a Question")
+available_docs = st.session_state.available_docs
+
+selected_docs = st.multiselect(
+    "Filter by specific documents (leave empty to search all):",
+    options=available_docs
+)
+
 user_query = st.text_input("What are you looking for?")
 
 # "Ask" button click
@@ -79,7 +97,7 @@ if st.button("Ask"):
     if user_query:
         with st.spinner("Searching documents and thinking..."):
             # Call Pipeline B
-            answer, sources = get_answer(user_query)
+            answer, sources = get_answer(user_query, selected_files=selected_docs)
             
         # final answer
         st.write("### Answer:")
@@ -88,7 +106,8 @@ if st.button("Ask"):
         # collapsible expander to show the source chunks (Metadata/Citation!)
         with st.expander("View Source Chunks"):
             for i, chunk in enumerate(sources, start=1):
-                st.write(f"**Chunk {i}:**")
+                source_name = chunk.metadata.get('file_name', 'Unknown')
+                st.write(f"**Chunk {i} (from {source_name}):**")
                 st.write(chunk.page_content)
                 st.write("---")
                 

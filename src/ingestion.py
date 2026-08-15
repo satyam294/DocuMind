@@ -57,7 +57,21 @@ def chunk_text(documents):
 
 
 
-def ingest_document(file_path):
+def get_available_documents():
+    if not os.path.exists(CHROMA_PATH):
+        return []
+        
+    db = Chroma(persist_directory=CHROMA_PATH)
+    
+    results = db.get() 
+    metadatas = results.get("metadatas", [])
+    
+    unique_names = set(meta.get("file_name") for meta in metadatas if "file_name" in meta)
+    return list(unique_names)
+
+
+
+def ingest_document(file_path, original_file_name):
     """
     Main function for Ingestion Pipeline:
     Loads a file, checks for duplicacy, chunks it, generates embeddings, and saves to ChromaDB.
@@ -73,12 +87,12 @@ def ingest_document(file_path):
         print("Duplicate document found! Skipping ingestion.")
         return False
     
-    embed_and_save(doclist, content_hash)
+    embed_and_save(doclist, content_hash, original_file_name)
     return True
 
 
 
-def ingest_raw_text(raw_text): 
+def ingest_raw_text(raw_text, text_title): 
     """
     Bypasses the file loader and ingests raw text directly.
     """
@@ -96,12 +110,12 @@ def ingest_raw_text(raw_text):
         print("Duplicate text found! Skipping ingestion.")
         return False
     
-    embed_and_save([doc], content_hash)
+    embed_and_save([doc], content_hash, text_title)
     return True
     
 
     
-def embed_and_save(doclist, content_hash):
+def embed_and_save(doclist, content_hash, original_file_name):
     """
     chunking, embedding and saving to ChromaDB
     """
@@ -110,10 +124,10 @@ def embed_and_save(doclist, content_hash):
     # add content_hash to the metadata
     for chunk in chunks:
         chunk.metadata["file_hash"] = content_hash
+        chunk.metadata["file_name"] = original_file_name
 
     embedding_model = get_embedding_model()
         
-    print(f"Saving {len(chunks)} chunks to ChromaDB...")
     db = Chroma.from_documents(
         chunks, 
         embedding_model, 

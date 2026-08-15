@@ -12,7 +12,7 @@ def get_embedding_model():
     return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
-def search_db(query, k=3):
+def search_db(query, k=3, selected_files=None):
     embedding_model = get_embedding_model()
 
     db = Chroma(
@@ -20,11 +20,19 @@ def search_db(query, k=3):
         embedding_function = embedding_model
     )
 
-    results = db.similarity_search(query, k=k)
-    return results
+    if selected_files:
+        if len(selected_files) == 1:
+            filter_dict = {"file_name": selected_files[0]}
+        else:
+            filter_dict = {"file_name": {"$in": selected_files}}
+
+        return db.similarity_search(query, k=k, filter=filter_dict)
+            
+    return db.similarity_search(query, k=k)
+    
 
 
-def get_answer(query):
+def get_answer(query, selected_files=None):
     """
     Main function of Answer generation pipeline:
     Takes the user's query and retrieves chunks from the database,
@@ -33,7 +41,11 @@ def get_answer(query):
 
     print(f"\n--- Starting Query Pipeline for: '{query}' ---")
 
-    retrieved_chunks = search_db(query)
+    retrieved_chunks = search_db(query, selected_files=selected_files)
+
+    if not retrieved_chunks:
+        return "No relevant context found in the selected documents.", []
+    
     context_text = "\n\n".join([chunk.page_content for chunk in retrieved_chunks])
     
     prompt_template = """
