@@ -6,3 +6,4 @@ venv/
 /data/vectordb/*
 !/data/vectordb/.gitkeep
 /src/__pycache__
+/tests/__pycache__
